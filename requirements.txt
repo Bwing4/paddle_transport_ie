@@ -1,6 +1,0 @@
-loguru
-hanlp
-tabulate
-importlib_metadata
-nltk
-paddlenlp
