@@ -88,30 +88,38 @@ test_loader = paddle.io.DataLoader(
 # 导入预训练的模型
 model = ErnieForTokenClassification.from_pretrained("ernie-1.0", num_classes=len(label_vocab)) # 有多少词就有多少类别
 
-metric = ChunkEvaluator(label_list=label_vocab.keys(), suffix=True)
-loss_fn = paddle.nn.loss.CrossEntropyLoss(ignore_index=ignore_label)
-optimizer = paddle.optimizer.AdamW(learning_rate=2e-5, parameters=model.parameters())
+metric = ChunkEvaluator(label_list=label_vocab.keys(), suffix=True) # 评估指标
+loss_fn = paddle.nn.loss.CrossEntropyLoss(ignore_index=ignore_label) # 交叉熵损失 ，如何整合crf
+optimizer = paddle.optimizer.AdamW(learning_rate=2e-5, parameters=model.parameters()) # 哟花期
 
 
+# 评估函数
 def evaluate(model, metric, data_loader):
     model.eval()
     metric.reset()
     for input_ids, seg_ids, lens, labels in data_loader:
         logits = model(input_ids, seg_ids)
-        preds = paddle.argmax(logits, axis=-1)
+
+        preds = paddle.argmax(logits, axis=-1) # 每个时刻预测
+
         n_infer, n_label, n_correct = metric.compute(None, lens, preds, labels)
+
         metric.update(n_infer.numpy(), n_label.numpy(), n_correct.numpy())
+
         precision, recall, f1_score = metric.accumulate()
     print("eval precision: %f - recall: %f - f1: %f" % (precision, recall, f1_score))
     model.train()
 
 
+# 训练10轮
 step = 0
 for epoch in range(10):
+
     for idx, (input_ids, token_type_ids, length, labels) in enumerate(train_loader):
         logits = model(input_ids, token_type_ids)
-        loss = paddle.mean(loss_fn(logits, labels))
-        loss.backward()
+        loss = paddle.mean(loss_fn(logits, labels)) # 平均损失
+        loss.backward() # 求梯度
+
         optimizer.step()
         optimizer.clear_grad()
         step += 1
@@ -155,6 +163,7 @@ def predict(model, data_loader, ds, label_vocab):
     for input_ids, seg_ids, lens, labels in data_loader:
         logits = model(input_ids, seg_ids)
         pred = paddle.argmax(logits, axis=-1)
+
         pred_list.append(pred.numpy())
         len_list.append(lens.numpy())
     preds = parse_decodes(ds, pred_list, len_list, label_vocab)
